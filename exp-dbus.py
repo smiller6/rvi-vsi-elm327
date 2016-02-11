@@ -5,8 +5,11 @@ import dbus.service
 import threading
 from gi.repository import Gtk as gtk
 
-from elm327.connection import *
-from elm327.obd import *
+# from elm327.connection import *
+# from elm327.obd import *
+
+from connection import *
+from obd import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-d", "--serial_device", help="Serial device to connect")

@@ -1,8 +1,11 @@
 # test of opening a port, query ELM chip
 
 # import elm327
-from elm327.connection import *
-from elm327.obd import *
+# from elm327.connection import *
+# from elm327.obd import *
+
+from connection import *
+from obd import *
 
 # for getting vars from cli
 import argparse
