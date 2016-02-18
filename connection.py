@@ -67,6 +67,8 @@ class SerialConnection(object):
                 break
             if c == "\x00":
                 continue
+            if c == "\r":
+                break
             response += c
 
         return response
