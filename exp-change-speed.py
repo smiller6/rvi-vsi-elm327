@@ -4,6 +4,8 @@
 # from elm327.connection import *
 # from elm327.obd import *
 
+import serial
+
 from serial import *
 
 from connection import *
@@ -18,7 +20,7 @@ parser.add_argument("-d", "--serial_device", help="Serial device to connect")
 #                     type=int)
 args = parser.parse_args()
 
-print("This will attempt to init the serial port at 9600 and then at 115200\n")
+print("This will attempt to init the serial port at 9600 and then at 500000\n")
 
 SERIAL_DEVICE = args.serial_device
 # BAUD_RATE = args.baud_rate
@@ -37,30 +39,30 @@ if SERIAL_DEVICE:
 
     ser.close()
 
-    serial1 = SerialConnectionFactory(port_class=Serial, baudrate=9600,
-                                      parity=PARITY_NONE,
-                                      timeout=0.5,
-                                      write_timeout=0.1)
+    ser = SerialConnectionFactory(port_class=Serial, baudrate=9600,
+                                  parity=PARITY_NONE,
+                                  timeout=0.5,
+                                  write_timeout=0.1)
 
-    connection1 = serial1.connect(SERIAL_DEVICE)
+    connection = ser.connect(SERIAL_DEVICE)
 
-    obd1 = OBDInterface(connection1)
+    obd = OBDInterface(connection)
 
-    print(obd1._send_command('ati'))
+    print(obd._send_command('ati'))
 
     # print(obd1._send_command('stbrt1000'))
 
-    print(obd1._send_command('stsbr115200'))
+    print(obd._send_command('stsbr500000'))
 
     print("closing and reconnecting...")
 
-    obd1._connection.close()
+    obd._connection.close()
 
     try:
-        serial2 = SerialConnectionFactory(port_class=Serial, baudrate=115200,
-                                          parity=PARITY_NONE,
-                                          timeout=0.5,
-                                          write_timeout=0.1)
+        ser = SerialConnectionFactory(port_class=Serial, baudrate=500000,
+                                      parity=PARITY_NONE,
+                                      timeout=0.5,
+                                      write_timeout=0.1)
     except ValueError:
         print("value error")
         raise
@@ -68,10 +70,20 @@ if SERIAL_DEVICE:
         print("serial exception")
         raise
 
-    connection2 = serial2.connect(SERIAL_DEVICE)
+    connection = ser.connect(SERIAL_DEVICE)
 
-    obd2 = OBDInterface(connection2)
+    obd = OBDInterface(connection)
 
     print("trying for response")
-    print(obd2._send_command("\r"))
-    print(obd2._send_command("STI"))
+    print(obd._send_command("\r"))
+    print(obd._send_command("STI"))
+
+    print(obd._send_command("ath1"))
+    print(obd._send_command("atcaf0"))
+    print(obd._send_command("atcsm0"))
+    print(obd._send_command("atma"))
+    # danger
+    while (True):
+        line = obd._connection._read()
+        if line:
+            print(line)

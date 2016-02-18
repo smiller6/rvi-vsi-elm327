@@ -28,6 +28,8 @@ if SERIAL_DEVICE:
 
         obd = OBDInterface(connection)
 
+        obd._connection._port.flush()
+
         print((obd._send_command("ATZ")))
     else:
         print("Baud rate incorrect. Supply range 9600:115200")

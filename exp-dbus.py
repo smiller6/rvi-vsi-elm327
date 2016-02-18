@@ -27,7 +27,7 @@ class ElmDbus(dbus.service.Object):
         dbus.service.Object.__init__(self, conn, object_path)
         self.busname = dbus.service.BusName('rvi.vsi.ElmDbus',
                                             bus=dbus.SessionBus())
-        self.obd_interface = None
+        self.obd = None
 
     @dbus.service.signal('rvi.vsi.ElmDbus')
     def at_response(self, msg=None):
@@ -38,28 +38,27 @@ class ElmDbus(dbus.service.Object):
     @dbus.service.method('rvi.vsi.ElmDbus')
     def at_send_raw(self, msg=None):
         print ">" + msg
-        response = self.obd_interface._send_command(str(msg))
+        response = self.obd._send_command(str(msg))
         self.at_response(response)
-
 
 def start_elm(ElmDbus, serial_device=None, baud_rate=0):
     if SERIAL_DEVICE:
-        if BAUD_RATE >= 9600 and BAUD_RATE <= 115200:
+        if BAUD_RATE >= 9600 and BAUD_RATE <= 1000000:
 
-            serial = SerialConnectionFactory(port_class=Serial,
-                                             baudrate=BAUD_RATE)
+            ser = SerialConnectionFactory(port_class=Serial,
+                                          baudrate=BAUD_RATE)
 
-            connection = serial.connect(SERIAL_DEVICE)
+            connection = ser.connect(SERIAL_DEVICE)
 
-            ElmDbus.obd_interface = OBDInterface(connection)
+            ElmDbus.obd = OBDInterface(connection)
 
             # print((obd._send_command("ATZ")))
 
-            ElmDbus.at_response(ElmDbus.obd_interface._send_command("ATZ"))
-            ElmDbus.at_response(ElmDbus.obd_interface._send_command("AT E0"))
+            ElmDbus.at_response(ElmDbus.obd._send_command("ATI"))
+            ElmDbus.at_response(ElmDbus.obd._send_command("ATE0"))
 
         else:
-            print("Baud rate incorrect. Supply range 9600:115200")
+            print("Baud rate incorrect. Supply range 9600:1000000")
 
     else:
         print("Insufficient args provided.\n"
@@ -73,9 +72,12 @@ if __name__ == '__main__':
     elm_obj = ElmDbus(dbus.SessionBus())
 
     # start thread on func
-    elm_thread = threading.Thread(target=start_elm,
-                                  args=(elm_obj, SERIAL_DEVICE, BAUD_RATE))
-    elm_thread.start()
+    # elm_thread_start = threading.Thread(target=start_elm,
+    #                               args=(elm_obj, SERIAL_DEVICE, BAUD_RATE))
+    # elm_thread_start.start()
+    # blocking setup call to start elm chip for the first time
+    start_elm(elm_obj, SERIAL_DEVICE, BAUD_RATE)
+
 
     print('Starting GTK Main')
     gtk.main()
