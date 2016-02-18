@@ -8,6 +8,9 @@ from gi.repository import Gtk as gtk
 # from elm327.connection import *
 # from elm327.obd import *
 
+import serial
+from serial import *
+
 from connection import *
 from obd import *
 
@@ -46,7 +49,10 @@ def start_elm(ElmDbus, serial_device=None, baud_rate=0):
         if BAUD_RATE >= 9600 and BAUD_RATE <= 1000000:
 
             ser = SerialConnectionFactory(port_class=Serial,
-                                          baudrate=BAUD_RATE)
+                                          baudrate=9600,
+                                          parity=PARITY_NONE,
+                                          timeout=0.5,
+                                          write_timeout=0.1)
 
             connection = ser.connect(SERIAL_DEVICE)
 
@@ -56,6 +62,23 @@ def start_elm(ElmDbus, serial_device=None, baud_rate=0):
 
             ElmDbus.at_response(ElmDbus.obd._send_command("ATI"))
             ElmDbus.at_response(ElmDbus.obd._send_command("ATE0"))
+            ElmDbus.at_response(ElmDbus.obd._send_command("STSBR" + str(BAUD_RATE)))
+
+            #close connection, reconnect
+            ElmDbus.obd._connection.close()
+
+            ser = SerialConnectionFactory(port_class=Serial,
+                                          baudrate=BAUD_RATE,
+                                          parity=PARITY_NONE,
+                                          timeout=0.5,
+                                          write_timeout=0.1)
+
+            connection = ser.connect(SERIAL_DEVICE)
+
+            ElmDbus.obd = OBDInterface(connection)
+
+            ElmDbus.at_response(ElmDbus.obd._send_command("STI"))
+
 
         else:
             print("Baud rate incorrect. Supply range 9600:1000000")
@@ -64,6 +87,11 @@ def start_elm(ElmDbus, serial_device=None, baud_rate=0):
         print("Insufficient args provided.\n"
               "Please supply serial device and baudrate\n")
 
+def read_elm(ElmDbus):
+    while(True):
+        line = ElmDbus.obd._connection._read()
+        if line:
+            print(ElmDbus.at_response(line))
 
 # main loop run dbus object for elm
 if __name__ == '__main__':
@@ -75,9 +103,18 @@ if __name__ == '__main__':
     # elm_thread_start = threading.Thread(target=start_elm,
     #                               args=(elm_obj, SERIAL_DEVICE, BAUD_RATE))
     # elm_thread_start.start()
+
     # blocking setup call to start elm chip for the first time
     start_elm(elm_obj, SERIAL_DEVICE, BAUD_RATE)
 
+    #we assume elm has started and we can talk to it...
+
+    #set up for can monitor
+    print(elm_obj.at_response(elm_obj.obd._send_command("ath1")))
+    print(elm_obj.at_response(elm_obj.obd._send_command("atcsm0")))
+
+    elm_thread_read = threading.Thread(target=read_elm, args=(elm_obj,))
+    elm_thread_read.start()
 
     print('Starting GTK Main')
     gtk.main()
