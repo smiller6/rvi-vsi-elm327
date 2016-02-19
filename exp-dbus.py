@@ -1,3 +1,12 @@
+#note to user:
+# for this to work the following should be installed:
+#   apt-packages:
+#       gir1.2-gtk-3.0
+#       gobject-introspection
+#       python-gi
+#    python:
+#        pyserial
+
 import argparse
 import dbus
 import dbus.mainloop.glib
@@ -43,6 +52,38 @@ class ElmDbus(dbus.service.Object):
         print ">" + msg
         response = self.obd._send_command(str(msg))
         self.at_response(response)
+
+    @dbus.service.signal('rvi.vsi.ElmDbus')
+    def can_response(self, msg=None):
+        print(msg)
+
+    @dbus.service.method('rvi.vsi.ElmDbus')
+    def monitor_can(self, silent=True, format=True, header=True, spaces=True):
+        pass
+
+    def command_set_silent_monitor(self, silent=True):
+        if silent:
+            self.obd._send_command("ATCSM1")
+        else:
+            self.obd._send_command("ATCSM0")
+
+    def command_format_can(self, format=True):
+        if format:
+            self.obd._send_command("ATCAF1")
+        else:
+            self.obd._send_command("ATCAF0")
+
+    def command_header_on(self, header=True):
+        if header:
+            self.obd._send_command("ATH1")
+        else:
+            self.obd._send_command("ATH0")
+
+    def command_spaces_on(self, spaces=True):
+        if spaces:
+            self.obd._send_command("ATS1")
+        else:
+            self.obd._send_command("ATS0")
 
 def start_elm(ElmDbus, serial_device=None, baud_rate=0):
     if SERIAL_DEVICE:
