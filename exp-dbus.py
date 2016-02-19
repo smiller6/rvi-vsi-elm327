@@ -12,7 +12,8 @@ import dbus
 import dbus.mainloop.glib
 import dbus.service
 import threading
-from gi.repository import Gtk as gtk
+#from gi.repository import Gtk as gtk
+import gtk
 
 # from elm327.connection import *
 # from elm327.obd import *
@@ -41,6 +42,9 @@ class ElmDbus(dbus.service.Object):
                                             bus=dbus.SessionBus())
         self.obd = None
 
+    ############################################################################
+    #   dbus
+
     @dbus.service.signal('rvi.vsi.ElmDbus')
     def at_response(self, msg=None):
         # send the message string of the serial response from the elm
@@ -58,33 +62,64 @@ class ElmDbus(dbus.service.Object):
         print(msg)
 
     @dbus.service.method('rvi.vsi.ElmDbus')
-    def monitor_can(self, silent=True, format=True, header=True, spaces=True):
-        pass
+    def monitor_can(self, silent=False, format=True, header=True, spaces=True):
+
+        #set parameters desired for can output
+        self.command_set_silent_monitor(silent)
+        self.command_format_can(format)
+        self.command_header_on(header)
+        self.command_spaces_on(spaces)
+        self.command_monitor_can_at()
+
+        #read_elm(self)
+    ############################################################################
+
+    ############################################################################
+    #commands
+    #   commands for interacting directly with ELM/STN chip
+    #   ST specific commands are designated with the postfix _st
+    #   per the ELM/STN set, most commands take a single argument
 
     def command_set_silent_monitor(self, silent=True):
         if silent:
-            self.obd._send_command("ATCSM1")
+            return self.obd._send_command("ATCSM1")
         else:
-            self.obd._send_command("ATCSM0")
+            return self.obd._send_command("ATCSM0")
 
     def command_format_can(self, format=True):
         if format:
-            self.obd._send_command("ATCAF1")
+            return self.obd._send_command("ATCAF1")
         else:
-            self.obd._send_command("ATCAF0")
+            return self.obd._send_command("ATCAF0")
 
     def command_header_on(self, header=True):
         if header:
-            self.obd._send_command("ATH1")
+            return self.obd._send_command("ATH1")
         else:
-            self.obd._send_command("ATH0")
+            return self.obd._send_command("ATH0")
 
     def command_spaces_on(self, spaces=True):
         if spaces:
-            self.obd._send_command("ATS1")
+            return self.obd._send_command("ATS1")
         else:
-            self.obd._send_command("ATS0")
+            return self.obd._send_command("ATS0")
 
+    def command_set_baud_rate_st(self, rate=9600):
+        if rate >= 9600 and rate <= 2000000:
+            return self.obd._send_command("STSBR" + str(rate))
+        else:
+            return False
+
+    def command_echo_on(self, echo=True):
+        if echo:
+            return self.obd._send_command("ATE1")
+        else:
+            return self.obd._send_command("ATE0")
+
+    def command_monitor_can_at(self):
+        return self.obd._send_command("ATMA")
+
+    ############################################################################
 def start_elm(ElmDbus, serial_device=None, baud_rate=0):
     if SERIAL_DEVICE:
         if BAUD_RATE >= 9600 and BAUD_RATE <= 1000000:
@@ -150,12 +185,21 @@ if __name__ == '__main__':
 
     #we assume elm has started and we can talk to it...
 
-    #set up for can monitor
+    # set up for can monitor
+
+
     print(elm_obj.at_response(elm_obj.obd._send_command("ath1")))
+    #print(elm_obj.at_response(elm_obj.obd._send_command("atcaf0")))
     print(elm_obj.at_response(elm_obj.obd._send_command("atcsm0")))
+    #print(elm_obj.at_response(elm_obj.obd._send_command("atma")))
+
+    #test of monitor_can command
 
     elm_thread_read = threading.Thread(target=read_elm, args=(elm_obj,))
     elm_thread_read.start()
+
+
+    #elm_obj.monitor_can(silent=False, format=True, header=True, spaces=True)
 
     print('Starting GTK Main')
     gtk.main()
