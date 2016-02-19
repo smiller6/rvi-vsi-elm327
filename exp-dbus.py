@@ -189,11 +189,10 @@ if __name__ == '__main__':
 
 
     print(elm_obj.at_response(elm_obj.obd._send_command("ath1")))
-    #print(elm_obj.at_response(elm_obj.obd._send_command("atcaf0")))
-    print(elm_obj.at_response(elm_obj.obd._send_command("atcsm0")))
-    #print(elm_obj.at_response(elm_obj.obd._send_command("atma")))
 
-    #test of monitor_can command
+    print(elm_obj.at_response(elm_obj.obd._send_command("atcaf0")))
+    print(elm_obj.at_response(elm_obj.obd._send_command("atcsm0")))
+    print(elm_obj.at_response(elm_obj.obd._send_command("atma")))
 
     elm_thread_read = threading.Thread(target=read_elm, args=(elm_obj,))
     elm_thread_read.start()
