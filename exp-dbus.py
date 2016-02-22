@@ -12,8 +12,7 @@ import dbus
 import dbus.mainloop.glib
 import dbus.service
 import threading
-#from gi.repository import Gtk as gtk
-import gtk
+from gi.repository import Gtk as gtk
 
 # from elm327.connection import *
 # from elm327.obd import *
@@ -71,7 +70,10 @@ class ElmDbus(dbus.service.Object):
         self.command_spaces_on(spaces)
         self.command_monitor_can_at()
 
-        #read_elm(self)
+        #this line is problematic, we need a way to start monitoring/reading
+        #without blocking the reply
+        read_elm(self)
+        return 'Starting can monitor'
     ############################################################################
 
     ############################################################################
@@ -118,6 +120,13 @@ class ElmDbus(dbus.service.Object):
 
     def command_monitor_can_at(self):
         return self.obd._send_command("ATMA")
+
+    def command_select_protocol(self, protocol_number="0"):
+        return self.obd._send_command("ATSP" + protocol_number)
+
+    def command_select_protocol_auto(self, protocol_number="0"):
+        return self.obd._send_command("ATSPA" + protocol_number)
+
 
     ############################################################################
 def start_elm(ElmDbus, serial_device=None, baud_rate=0):
@@ -176,9 +185,7 @@ if __name__ == '__main__':
     elm_obj = ElmDbus(dbus.SessionBus())
 
     # start thread on func
-    # elm_thread_start = threading.Thread(target=start_elm,
-    #                               args=(elm_obj, SERIAL_DEVICE, BAUD_RATE))
-    # elm_thread_start.start()
+
 
     # blocking setup call to start elm chip for the first time
     start_elm(elm_obj, SERIAL_DEVICE, BAUD_RATE)
@@ -189,7 +196,8 @@ if __name__ == '__main__':
 
 
     print(elm_obj.at_response(elm_obj.obd._send_command("ath1")))
-
+    #this line is only because we know what rate we are looking for on can
+    print(elm_obj.at_response(elm_obj.obd._send_command("atspa8")))
     print(elm_obj.at_response(elm_obj.obd._send_command("atcaf0")))
     print(elm_obj.at_response(elm_obj.obd._send_command("atcsm0")))
     print(elm_obj.at_response(elm_obj.obd._send_command("atma")))

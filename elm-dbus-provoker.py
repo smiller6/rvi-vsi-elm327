@@ -44,6 +44,9 @@ if __name__ == '__main__':
         elm.connect_to_signal('can_response', watcher.CAN_signal_handler,
                               dbus_interface=elm_name)
 
+        elm.connect_to_signal('at_response', watcher.CAN_signal_handler,
+                              dbus_interface=elm_name)
+
         monitor_can = elm.get_dbus_method('monitor_can', dbus_interface=elm_name)
 
         silent = False
