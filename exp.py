@@ -1,8 +1,11 @@
 # test of opening a port, query ELM chip
 
 # import elm327
-from elm327.connection import *
-from elm327.obd import *
+# from elm327.connection import *
+# from elm327.obd import *
+
+from connection import *
+from obd import *
 
 # for getting vars from cli
 import argparse
@@ -24,6 +27,8 @@ if SERIAL_DEVICE:
         connection = serial.connect(SERIAL_DEVICE)
 
         obd = OBDInterface(connection)
+
+        obd._connection._port.flush()
 
         print((obd._send_command("ATZ")))
     else:
