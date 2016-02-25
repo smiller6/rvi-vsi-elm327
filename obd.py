@@ -51,9 +51,6 @@ class OBDInterface(object):
 
         # not necessarily appropriate to send commands when init -SM
 
-        # self._send_command("AT Z")
-        # self._send_command("AT E0")
-        # self._send_command("\x0D")
         # self._send_command("AT I")
         # self._send_command("AT E0")
 

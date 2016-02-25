@@ -44,6 +44,7 @@ if __name__ == '__main__':
         elm.connect_to_signal('can_response', watcher.CAN_signal_handler,
                               dbus_interface=elm_name)
 
+        # also connect to at responses for now
         elm.connect_to_signal('at_response', watcher.CAN_signal_handler,
                               dbus_interface=elm_name)
 
@@ -54,6 +55,6 @@ if __name__ == '__main__':
         header = True
         spaces = True
 
-        monitor_can(silent, format, header, spaces)
+        #monitor_can(silent, format, header, spaces)
 
     gtk.main()
