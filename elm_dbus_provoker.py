@@ -4,7 +4,8 @@ import dbus.mainloop.glib
 import dbus.service
 from gi.repository import Gtk as gtk
 from collections import deque
-
+import Queue
+import threading
 #please run this with python3
 import can
 
@@ -33,11 +34,19 @@ class ElmDbusCanWatcher(dbus.service.Object):
         # store of messages to be parsed
         self.messages = deque()
 
+        self.raw_message_queue = Queue.Queue()
+        self.interp_message_queue = Queue.Queue()
+
     def CAN_signal_handler(self, can_message=None):
         #print(can_message)
-        print(self.create_can_message_from_raw_signal(can_message))
+        self.raw_message_queue.put(can_message)
+        interp_thread = threading.Thread(target=self.create_can_message_from_raw_signal,
+                         args=(self.raw_message_queue,
+                               self.interp_message_queue))
+        interp_thread.start()
+        interp_thread.join()
 
-    def create_can_message_from_raw_signal(self, raw=None):
+    def create_can_message_from_raw_signal(self, raw_queue, interp_queue):
         # can_message = can.Message(timestamp=0.0,
         #                           is_remote_frame=False,
         #                           is_error_frame=False,
@@ -48,29 +57,37 @@ class ElmDbusCanWatcher(dbus.service.Object):
         can_message = can.Message()
 
         # parse the string for the id. the rest should be data
+        if (raw_queue.empty() == False):
+            raw = raw_queue.get()
 
-        converted = raw.encode('utf-8')
+            converted = raw.encode('utf-8')
 
-        raw_list = list()
-        raw_list = converted.split()
+            raw_list = list()
+            raw_list = converted.split()
 
-        can_id = int(raw_list.pop(0), 16)
+            can_id = int(raw_list.pop(0), 16)
 
-        can_data = str()
+            can_data = str()
 
-        while(raw_list.__len__() > 0):
-            can_data += raw_list.pop(0)
+            while(raw_list.__len__() > 0):
+                can_data += raw_list.pop(0)
 
-        can_data = bytearray(can_data)
+            can_data = bytearray(can_data)
 
-        can_message.arbitration_id = can_id
-        can_message.data = can_data
+            can_message.arbitration_id = can_id
+            can_message.data = can_data
 
-        # test print result
-        print(can_message)
+            # test print result
+            #print(can_message)
 
-        return can_message
+        if (interp_queue.full() == False):
+            interp_queue.put(can_message)
 
+    def print_interp_message(self):
+        while(True):
+            if (self.interp_message_queue.empty() == False):
+                msg = self.interp_message_queue.get()
+                print(msg)
 
 if __name__ == '__main__':
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
@@ -98,5 +115,9 @@ if __name__ == '__main__':
         spaces = True
 
         #monitor_can(silent, format, header, spaces)
+
+
+        print_interp_thread = threading.Thread(target=watcher.print_interp_message)
+        print_interp_thread.start()
 
     gtk.main()
