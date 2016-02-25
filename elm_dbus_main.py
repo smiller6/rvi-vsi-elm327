@@ -67,7 +67,7 @@ class ElmDbus(dbus.service.Object):
         self.busname = dbus.service.BusName('rvi.vsi.ElmDbus',
                                             bus=dbus.SessionBus())
         # elm obd reference
-        self.obd = None
+        self._elm_obd = None
 
         self._command_queue = command_queue
         self._response_queue = response_queue
@@ -122,60 +122,76 @@ class ElmDbus(dbus.service.Object):
     def command_at_command(self, command=""):
         self._send_command(command)
 
+    @dbus.service.method('rvi.vsi.ElmDbus')
     def command_buffer_dump(self):
         self._send_command("ATBD")
 
+    @dbus.service.method('rvi.vsi.ElmDbus')
     def command_set_silent_monitor(self, silent=True):
         if silent:
             self._send_command("ATCSM1")
         else:
             self._send_command("ATCSM0")
 
+    @dbus.service.method('rvi.vsi.ElmDbus')
     def command_format_can(self, format=True):
         if format:
             self._send_command("ATCAF1")
         else:
             self._send_command("ATCAF0")
 
+    @dbus.service.method('rvi.vsi.ElmDbus')
     def command_header_on(self, header=True):
         if header:
             self._send_command("ATH1")
         else:
             self._send_command("ATH0")
 
+    @dbus.service.method('rvi.vsi.ElmDbus')
     def command_spaces_on(self, spaces=True):
         if spaces:
             self._send_command("ATS1")
         else:
             self._send_command("ATS0")
 
+    @dbus.service.method('rvi.vsi.ElmDbus')
     def command_set_baud_rate_st(self, rate=9600):
         if rate >= 9600 and rate <= 2000000:
             self._send_command("STSBR" + str(rate))
         else:
             return False
 
+    @dbus.service.method('rvi.vsi.ElmDbus')
     def command_echo_on(self, echo=True):
         if echo:
             self._send_command("ATE1")
         else:
             self._send_command("ATE0")
 
+    @dbus.service.method('rvi.vsi.ElmDbus')
     def command_monitor_can_at(self):
         self._send_command("ATMA")
 
+    @dbus.service.method('rvi.vsi.ElmDbus')
     def command_select_protocol(self, protocol_number="0"):
         self._send_command("ATSP" + protocol_number)
 
+    @dbus.service.method('rvi.vsi.ElmDbus')
     def command_select_protocol_auto(self, protocol_number="0"):
         self._send_command("ATSPA" + protocol_number)
 
+    @dbus.service.method('rvi.vsi.ElmDbus')
     def command_warm_start(self):
         self._send_command("ATWS")
 
     # full reset of chip, clears memory. all settings must be reprogrammed after
+    @dbus.service.method('rvi.vsi.ElmDbus')
     def command_restart(self):
+        self._send_command("\r")
         self._send_command("ATZ")
+        if(self._elm_obd):
+            self._elm_obd.obd._connection.close()
+            self._elm_obd.start_elm(SERIAL_DEVICE, BAUD_RATE)
 
 ################################################################################
 
@@ -286,6 +302,9 @@ class ElmObd(object):
                 sti_response = self.command_at_command("STI")
                 print("Desired Baud Rate STI response: " + sti_response)
 
+                    # tell the elm to automatically select a protocol...
+                self.command_select_protocol_auto(protocol_number=CAN_PROTOCOL)
+
                 # cheat for now, we need a way to reliably test the response from the elm...
                 return 0
 
@@ -336,7 +355,6 @@ def run_dbus(ElmDbus):
 if __name__ == '__main__':
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     # create dbus object
-    elm_dbus = ElmDbus(dbus.SessionBus())
     elm_obd = ElmObd(command_queue, response_queue)
     # start thread on func
 
@@ -347,6 +365,10 @@ if __name__ == '__main__':
         start_try_count += 1
         if(start_try_count >= 5):
             exit()
+
+    elm_dbus = ElmDbus(dbus.SessionBus())
+
+    elm_dbus.obd = elm_obd
     # we assume elm has started and we can talk to it...
 
     # example/test of command response:
@@ -360,9 +382,6 @@ if __name__ == '__main__':
     response_queue.task_done()
 
     elm_obd.command_buffer_dump()
-
-    # tell the elm to automatically select a protocol...
-    elm_obd.command_select_protocol_auto(protocol_number=CAN_PROTOCOL)
 
     elm_thread = threading.Thread(target=run_elm_obd, args=(elm_obd,))
     elm_dbus_thread = threading.Thread(target=run_dbus, args=(elm_dbus,))
