@@ -56,13 +56,12 @@ class SerialConnection(object):
         self._port.reset_input_buffer()
         self._port.reset_output_buffer()
         self._port.write(data)
-        # self._port.write("\n\r")
         self._port.write("\r")
 
     def _read(self):
         response = ""
         while True:
-            c = self._port.read(1)
+            c = self._port.read()
             if not c or c == ">":
                 break
             if c == "\x00":
