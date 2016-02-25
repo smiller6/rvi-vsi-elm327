@@ -8,6 +8,9 @@ import Queue
 import threading
 #please run this with python3
 import can
+import time
+import json
+import can_dbc_reader
 
 elm_name = "rvi.vsi.ElmDbus"
 elm_path = "/rvi/vsi/ElmDbus/object"
@@ -57,7 +60,7 @@ class ElmDbusCanWatcher(dbus.service.Object):
         can_message = can.Message()
 
         # parse the string for the id. the rest should be data
-        if (raw_queue.empty() == False):
+        if (raw_queue.empty() is False):
             raw = raw_queue.get()
 
             converted = raw.encode('utf-8')
@@ -72,6 +75,9 @@ class ElmDbusCanWatcher(dbus.service.Object):
             while(raw_list.__len__() > 0):
                 can_data += raw_list.pop(0)
 
+            # should be done using the raw queue
+            raw_queue.task_done()
+
             can_data = bytearray(can_data)
 
             can_message.arbitration_id = can_id
@@ -80,14 +86,23 @@ class ElmDbusCanWatcher(dbus.service.Object):
             # test print result
             #print(can_message)
 
-        if (interp_queue.full() == False):
+            # TODO: actually interpret the message...!
+
+        if (interp_queue.full() is False):
             interp_queue.put(can_message)
 
-    def print_interp_message(self):
+    def interp_message(self, message):
+        pass
+
+    # test function, use this if not getting the interp message for signal emission
+    def print_interp_message(self, exclusive=False):
         while(True):
             if (self.interp_message_queue.empty() == False):
                 msg = self.interp_message_queue.get()
                 print(msg)
+                # only set task done if this is exclusive...
+                if exclusive is True:
+                    self.interp_message_queue.task_done()
 
 if __name__ == '__main__':
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
@@ -116,8 +131,8 @@ if __name__ == '__main__':
 
         #monitor_can(silent, format, header, spaces)
 
-
-        print_interp_thread = threading.Thread(target=watcher.print_interp_message)
+        # for now, please print the interpretations locally
+        print_interp_thread = threading.Thread(target=watcher.print_interp_message, args=(False,))
         print_interp_thread.start()
 
     gtk.main()
