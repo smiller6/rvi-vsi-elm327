@@ -33,19 +33,28 @@ parser.add_argument("--can_silent", help="CAN Silent Monitoring Disable",
                     action='store_true')
 # parser.add_argument("-r", "--can_rate", help="CAN communication rate (kbps)",
 #                     type=int)
-parser.add_argument("--can_protocol", help="CAN Protocol:\n"
-                                       "0 Automatic\n"
-                                       "1 SAE J1850 PWM (41.6 Kbaud)\n"
-                                       "2 SAE J1850 VPW (10.4 Kbaud)\n"
-                                       "3 ISO 9141-2 (5 baud init)\n"
-                                       "4 ISO 14230-4 KWP (5 baud init)\n"
-                                       "5 ISO 14230-4 KWP (fast init)\n"
-                                       "6 ISO 15765-4 CAN (11 bit ID, 500 Kbaud)\n"
-                                       "7 ISO 15765-4 CAN (29 bit ID, 500 Kbaud)\n"
-                                       "8 ISO 15765-4 CAN (11 bit ID, 250 Kbaud)\n"
-                                       "9 ISO 15765-4 CAN (29 bit ID, 250 Kbaud)\n"
-                                       "A SAE J1939 CAN (29 bit ID, 250* Kbaud)\n",
+parser.add_argument("--can_protocol",
+                    help="CAN Protocol:\n"
+                    "0 Automatic\n"
+                    "1 SAE J1850 PWM (41.6 Kbaud)\n"
+                    "2 SAE J1850 VPW (10.4 Kbaud)\n"
+                    "3 ISO 9141-2 (5 baud init)\n"
+                    "4 ISO 14230-4 KWP (5 baud init)\n"
+                    "5 ISO 14230-4 KWP (fast init)\n"
+                    "6 ISO 15765-4 CAN (11 bit ID, 500 Kbaud)\n"
+                    "7 ISO 15765-4 CAN (29 bit ID, 500 Kbaud)\n"
+                    "8 ISO 15765-4 CAN (11 bit ID, 250 Kbaud)\n"
+                    "9 ISO 15765-4 CAN (29 bit ID, 250 Kbaud)\n"
+                    "A SAE J1939 CAN (29 bit ID, 250* Kbaud)\n"
+                    "B User1 CAN (11 bit ID, 125 Kbaud)(programmable)\n",
                     default="0"
+                    )
+parser.add_argument("--custom_can_rate",
+                    help="If using protocol other than one "
+                    "of the defaults, use this option "
+                    "to set a custom CAN rate of up to "
+                    "500kbps",
+                    default=125000
                     )
 args = parser.parse_args()
 
@@ -54,7 +63,7 @@ BAUD_RATE = args.baud_rate
 CAN_AUTO_START = args.can_auto_start
 CAN_SILENT_MONITORING = args.can_silent
 CAN_PROTOCOL = str(args.can_protocol)
-# CAN_RATE = args.can_rate
+CUSTOM_CAN_RATE = args.custom_can_rate
 
 command_queue = CommandQueue(maxSize=COMMAND_QUEUE_MAX_SIZE)
 response_queue = ResponseQueue(maxSize=RESPONSE_QUEUE_MAX_SIZE)
@@ -181,6 +190,10 @@ class ElmDbus(dbus.service.Object):
         self._send_command("ATSPA" + protocol_number)
 
     @dbus.service.method('rvi.vsi.ElmDbus')
+    def command_set_defaults(self):
+        self._send_command("ATD")
+
+    @dbus.service.method('rvi.vsi.ElmDbus')
     def command_warm_start(self):
         self._send_command("ATWS")
 
@@ -193,6 +206,15 @@ class ElmDbus(dbus.service.Object):
             self._elm_obd.obd._connection.close()
             self._elm_obd.start_elm(SERIAL_DEVICE, BAUD_RATE)
 
+    @dbus.service.method('rvi.vsi.ElmDbus')
+    def set_custom_can_rate(self, rate):
+        _rate = int(rate)
+        if(rate > 0 and rate <= 500000):
+            # calc the divisor for the desired rate agains 500000
+            div = int(500000/rate)
+            div = str(hex(div))
+            # program the programmable value for user can rate divisor
+            self.command_at_command("AT" + "PP" + "2D" + "SV" + div)
 ################################################################################
 
 
@@ -264,6 +286,15 @@ class ElmObd(object):
     def command_warm_start(self):
         return self.obd._send_command("ATWS")
 
+    def set_custom_can_rate(self, rate):
+        _rate = int(rate)
+        if(rate > 0 and rate <= 500000):
+            # calc the divisor for the desired rate agains 500000
+            div = int(500000/rate)
+            div = str(hex(div))
+            # program the programmable value for user can rate divisor
+            self.command_at_command("AT" + "PP" + "2D" + "SV" + div)
+
     def start_elm(self, serial_device=None, baud_rate=0):
         if SERIAL_DEVICE:
             if BAUD_RATE >= 9600 and BAUD_RATE <= 1000000:
@@ -302,8 +333,12 @@ class ElmObd(object):
                 sti_response = self.command_at_command("STI")
                 print("Desired Baud Rate STI response: " + sti_response)
 
+                if CUSTOM_CAN_RATE:
+                    self.set_custom_can_rate(CUSTOM_CAN_RATE)
+
                     # tell the elm to automatically select a protocol...
                 self.command_select_protocol_auto(protocol_number=CAN_PROTOCOL)
+
 
                 # cheat for now, we need a way to reliably test the response from the elm...
                 return 0
