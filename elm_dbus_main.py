@@ -206,6 +206,15 @@ class ElmDbus(dbus.service.Object):
             self._elm_obd.obd._connection.close()
             self._elm_obd.start_elm(SERIAL_DEVICE, BAUD_RATE)
 
+    @dbus.service.method('rvi.vsi.ElmDbus')
+    def set_custom_can_rate(self, rate):
+        _rate = int(rate)
+        if(rate > 0 and rate <= 500000):
+            # calc the divisor for the desired rate agains 500000
+            div = int(500000/rate)
+            div = str(hex(div))
+            # program the programmable value for user can rate divisor
+            self.command_at_command("AT" + "PP" + "2D" + "SV" + div)
 ################################################################################
 
 
