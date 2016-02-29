@@ -3,11 +3,12 @@ import dbus
 import dbus.mainloop.glib
 import dbus.service
 from gi.repository import Gtk as gtk
-import Queue
-import threading
+#import Queue
+#import threading
 import can
 import json
 import codecs
+from multiprocessing import Process, Queue
 
 import can_dbc_reader
 
@@ -35,13 +36,13 @@ class ElmDbusCanWatcher(dbus.service.Object):
         self.busName = dbus.service.BusName('rvi.vsi.ElmDbusCanWatcher',
                                             bus=dbus.SessionBus())
 
-        self.raw_message_queue = Queue.Queue()
-        self.interp_message_queue = Queue.Queue()
+        self.raw_message_queue = Queue()
+        self.interp_message_queue = Queue()
 
         self._interp = CanInterpreter()
         self._interp.interp_queue = self.interp_message_queue
 
-        self.print_interp_thread = threading.Thread(target=self.print_interp_message, args=(True,))
+        self.print_interp_thread = Process(target=self.print_interp_message, args=(True,))
         self.print_interp_thread.start()
 
     @dbus.service.signal('rvi.vsi.ElmDbusCanWatcher')
@@ -51,7 +52,7 @@ class ElmDbusCanWatcher(dbus.service.Object):
     def CAN_signal_handler(self, can_message=None):
         #print(can_message)
         self.raw_message_queue.put(can_message)
-        interp_thread = threading.Thread(target=self.create_can_message_from_raw_signal,
+        interp_thread = Process(target=self.create_can_message_from_raw_signal,
                          args=(self.raw_message_queue,
                                self.interp_message_queue))
         interp_thread.start()
@@ -84,7 +85,7 @@ class ElmDbusCanWatcher(dbus.service.Object):
                 can_data += raw_list.pop(0)
 
             # should be done using the raw queue
-            raw_queue.task_done()
+            #raw_queue.task_done()
 
             can_data = bytearray(can_data)
 
@@ -92,6 +93,7 @@ class ElmDbusCanWatcher(dbus.service.Object):
             can_message.data = can_data
 
             # actually interpret the message...!
+            # self._interp.interp_message(can_message)
             self._interp.interp_message(can_message)
 
     # TODO: We should not be relying on this function for the task being done...
@@ -104,8 +106,8 @@ class ElmDbusCanWatcher(dbus.service.Object):
                 print(msg)
                 # emit signal
                 # only set task done if this is exclusive...
-                if exclusive is True:
-                    self.interp_message_queue.task_done()
+                #if exclusive is True:
+                    #self.interp_message_queue.task_done()
 
 class CanInterpreter(object):
     def __init__(self):
@@ -147,7 +149,7 @@ class CanInterpreter(object):
                 #     print(signal, specs)
 
     def interp_message(self, message):
-        interp_thread = threading.Thread(target=self._interp_message_threaded, args=(message,))
+        interp_thread = Process(target=self._interp_message_threaded, args=(message,))
         interp_thread.start()
         interp_thread.join()
 
@@ -181,8 +183,8 @@ if __name__ == '__main__':
 
         elm = bus.get_object(elm_name, elm_path)
 
-        elm.connect_to_signal('can_response', watcher.CAN_signal_handler,
-                              dbus_interface=elm_name)
+        # elm.connect_to_signal('can_response', watcher.CAN_signal_handler,
+        #                       dbus_interface=elm_name)
 
         # also connect to at responses for now
         elm.connect_to_signal('at_response', watcher.CAN_signal_handler,
