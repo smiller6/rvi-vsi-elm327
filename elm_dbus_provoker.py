@@ -80,7 +80,7 @@ class ElmDbusCanWatcher(dbus.service.Object):
 
             can_data = str()
 
-            while(raw_list.__len__() > 0):
+            while raw_list.__len__() > 0:
                 can_data += raw_list.pop(0)
 
             # should be done using the raw queue
@@ -93,6 +93,7 @@ class ElmDbusCanWatcher(dbus.service.Object):
 
             # actually interpret the message...!
             self._interp.interp_message(can_message)
+            #perhaps make the above blocking to ...
 
     # TODO: We should not be relying on this function for the task being done...
     # test function, use this if not getting the interp message for signal emission

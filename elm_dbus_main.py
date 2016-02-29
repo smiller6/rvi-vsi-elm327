@@ -263,7 +263,7 @@ class ElmObd(object):
             return self.obd._send_command("ATS0")
 
     def command_set_baud_rate_st(self, rate=9600):
-        if rate >= 9600 and rate <= 2000000:
+        if 9600 <= rate <= 2000000:
             return self.obd._send_command("STSBR" + str(rate))
         else:
             return False
