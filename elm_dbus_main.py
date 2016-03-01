@@ -20,7 +20,9 @@ from serial import *
 from connection import *
 from obd import *
 
-from elm_queue import *
+COMMAND_QUEUE_MAX_SIZE = 1024
+
+RESPONSE_QUEUE_MAX_SIZE = 1024
 
 EXPECTED_STI_VERSION = 'STN1110 v3.2.0'
 
