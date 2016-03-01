@@ -54,11 +54,12 @@ class ElmDbusCanWatcher(dbus.service.Object):
     def CAN_signal_handler(self, can_message=None):
         #print(can_message)
         self.raw_message_queue.put(can_message)
-        interp_thread = Process(target=self.create_can_message_from_raw_signal,
-                         args=(self.raw_message_queue,
-                               self.interp_message_queue))
-        interp_thread.start()
-        interp_thread.join()
+        # interp_thread = Process(target=self.create_can_message_from_raw_signal,
+        #                  args=(self.raw_message_queue,
+        #                        self.interp_message_queue))
+        # interp_thread.start()
+        # interp_thread.join()
+        self.create_can_message_from_raw_signal(self.raw_message_queue, self.interp_message_queue)
 
     def create_can_message_from_raw_signal(self, raw_queue, interp_queue):
         # can_message = can.Message(timestamp=0.0,
@@ -149,9 +150,10 @@ class CanInterpreter(object):
                     self.interp_queue.put(json.dumps({'signal_type':'VEHICLE_SIGNAL', 'signal_id':signal, 'value':sig_value}))
 
     def interp_message(self, message):
-        interp_thread = Process(target=self._interp_message_threaded, args=(message,))
-        interp_thread.start()
-        interp_thread.join()
+        # interp_thread = Process(target=self._interp_message_threaded, args=(message,))
+        # interp_thread.start()
+        # interp_thread.join()
+        self._interp_message_threaded(message)
 
     def _interp_message_threaded(self, message):
         msgId = int(message.arbitration_id)
