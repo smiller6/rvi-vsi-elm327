@@ -11,7 +11,8 @@ import argparse
 import dbus
 import dbus.mainloop.glib
 import dbus.service
-import threading
+# import threading
+from multiprocessing import Process, Queue
 from gi.repository import Gtk as gtk
 
 from serial import *
@@ -19,7 +20,9 @@ from serial import *
 from connection import *
 from obd import *
 
-from elm_queue import *
+COMMAND_QUEUE_MAX_SIZE = 1024
+
+RESPONSE_QUEUE_MAX_SIZE = 1024
 
 EXPECTED_STI_VERSION = 'STN1110 v3.2.0'
 
@@ -65,8 +68,8 @@ CAN_SILENT_MONITORING = args.can_silent
 CAN_PROTOCOL = str(args.can_protocol)
 CUSTOM_CAN_RATE = args.custom_can_rate
 
-command_queue = CommandQueue(maxSize=COMMAND_QUEUE_MAX_SIZE)
-response_queue = ResponseQueue(maxSize=RESPONSE_QUEUE_MAX_SIZE)
+command_queue = Queue(COMMAND_QUEUE_MAX_SIZE)
+response_queue = Queue(RESPONSE_QUEUE_MAX_SIZE)
 
 # create test class for elm chip on dbus
 class ElmDbus(dbus.service.Object):
@@ -263,7 +266,7 @@ class ElmObd(object):
             return self.obd._send_command("ATS0")
 
     def command_set_baud_rate_st(self, rate=9600):
-        if rate >= 9600 and rate <= 2000000:
+        if 9600 <= rate <= 2000000:
             return self.obd._send_command("STSBR" + str(rate))
         else:
             return False
@@ -369,7 +372,7 @@ def run_elm_obd(ElmObd):
         if (command_queue.empty() == False):
             command = command_queue.get()
             elm_response = ElmObd.obd._send_command(command)
-            command_queue.task_done()
+            # command_queue.task_done()
         else:
             elm_response = ElmObd.obd._connection._read()
 
@@ -384,7 +387,7 @@ def run_dbus(ElmDbus):
             #publish response
             response = response_queue.get()
             ElmDbus.at_response(response)
-            response_queue.task_done()
+            # response_queue.task_done()
 
 # main loop run dbus object for elm
 if __name__ == '__main__':
@@ -407,19 +410,19 @@ if __name__ == '__main__':
     # we assume elm has started and we can talk to it...
 
     # example/test of command response:
-    send_command(command_queue, "atws")
-    command = command_queue.get()
-    command_queue.task_done()
-    print(elm_obd.obd._send_command(command))
-    response = elm_obd.obd._connection._read()
-    response_queue.put(response)
-    elm_dbus.at_response(response_queue.get())
-    response_queue.task_done()
+    # send_command(command_queue, "atws")
+    # command = command_queue.get()
+    # command_queue.task_done()
+    # print(elm_obd.obd._send_command(command))
+    # response = elm_obd.obd._connection._read()
+    # response_queue.put(response)
+    # elm_dbus.at_response(response_queue.get())
+    # response_queue.task_done()
 
     elm_obd.command_buffer_dump()
 
-    elm_thread = threading.Thread(target=run_elm_obd, args=(elm_obd,))
-    elm_dbus_thread = threading.Thread(target=run_dbus, args=(elm_dbus,))
+    elm_thread = Process(target=run_elm_obd, args=(elm_obd,))
+    elm_dbus_thread = Process(target=run_dbus, args=(elm_dbus,))
 
     elm_thread.start()
     elm_dbus_thread.start()
