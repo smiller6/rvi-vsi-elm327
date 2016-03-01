@@ -29,6 +29,8 @@ args = parser.parse_args()
 # method = args.method
 # nargs = args.args
 
+import binascii
+
 class ElmDbusCanWatcher(dbus.service.Object):
 
     def __init__(self, conn, object_path='/rvi/vsi/ElmDbusCanWatcher/object'):
@@ -79,10 +81,12 @@ class ElmDbusCanWatcher(dbus.service.Object):
 
             can_id = int(raw_list.pop(0), 16)
 
-            can_data = str()
+            #can_data = int()
+
+            can_data = []
 
             while(raw_list.__len__() > 0):
-                can_data += raw_list.pop(0)
+               can_data.append(int(raw_list.pop(), 16))
 
             # should be done using the raw queue
             #raw_queue.task_done()
@@ -93,7 +97,6 @@ class ElmDbusCanWatcher(dbus.service.Object):
             can_message.data = can_data
 
             # actually interpret the message...!
-            # self._interp.interp_message(can_message)
             self._interp.interp_message(can_message)
 
     # TODO: We should not be relying on this function for the task being done...
@@ -135,7 +138,7 @@ class CanInterpreter(object):
     def map_values(self, arb_id, payload):
         num_bits = self.can_table[arb_id]['frame_bytes'] * 8
         for signal, specs in self.can_table[arb_id]['species'].items():
-            sig_value = ((payload >> (num_bits - (specs['end_bit']-specs['length']+1) ) & (self.get_mask_ones(length=specs['length'], maximum = ((2**num_bits)-1)))) * specs['factor']) + specs['offset']
+            sig_value = ((payload >> (specs['end_bit']-specs['length']+1)  & (self.get_mask_ones(length=specs['length'], maximum = ((2**num_bits)-1)))) * specs['factor']) + specs['offset']
             if specs['value'] == sig_value:
                 pass
             else:
@@ -144,9 +147,6 @@ class CanInterpreter(object):
                 # send result to the que
                 if self.interp_queue.full() is False:
                     self.interp_queue.put(json.dumps({'signal_type':'VEHICLE_SIGNAL', 'signal_id':signal, 'value':sig_value}))
-                # if arb_id == 800:
-                #     print(payload)
-                #     print(signal, specs)
 
     def interp_message(self, message):
         interp_thread = Process(target=self._interp_message_threaded, args=(message,))
@@ -154,23 +154,21 @@ class CanInterpreter(object):
         interp_thread.join()
 
     def _interp_message_threaded(self, message):
-        if int(message.arbitration_id) not in self.can_table:
+        msgId = int(message.arbitration_id)
+        data = int(binascii.hexlify(message.data), 16)
+        if msgId not in self.can_table:
             print('!!! WARNING UNKNOWN CAN FRAME !!!')
 
-        elif int(message.arbitration_id) not in self.can_table:
-            self.state_table[int(message.arbitration_id)] = message.data
-            # self.map_values(arb_id = int(message.arbitration_id), payload = int.from_bytes(message.data, byteorder='big', signed=False))
-            # the line above is python3, below we have something that should work for py2, might work in py3...
-            self.map_values(arb_id = int(message.arbitration_id), payload = int(codecs.encode(message.data, 'hex'), 16))
+        elif msgId not in self.state_table:
+            self.state_table[msgId] = data
+            self.map_values(arb_id = msgId, payload = data)
 
-        elif message.data == self.state_table[int(message.arbitration_id)]:
+        elif message.data == self.state_table[msgId]:
             pass
 
         else:
-            self.state_table[int(message.arbitration_id)] = message.data
-            # self.map_values(arb_id = int(message.arbitration_id), payload = int.from_bytes(message.data, byteorder='big', signed=False))
-            # the line above is python3, below we have something that should work for py2, might work in py3...
-            self.map_values(arb_id = int(message.arbitration_id), payload = int(codecs.encode(message.data, 'hex'), 16))
+            self.state_table[msgId] = data
+            self.map_values(arb_id = msgId, payload = data)
 
 if __name__ == '__main__':
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
