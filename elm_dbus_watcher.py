@@ -12,17 +12,6 @@ import can_dbc_reader
 elm_name = "rvi.vsi.ElmDbus"
 elm_path = "/rvi/vsi/ElmDbus/object"
 
-
-parser = argparse.ArgumentParser(description=('Provoke the Elm Dbus object '+elm_name))
-
-#parser.add_argument('-m', '--method', help='Method to invoke')
-#parser.add_argument('-a', '--args', help='Method args', nargs='*')
-
-parser.add_argument('-c', '--watch-can', help='Start an object that watches the CAN signals', action='store_true')
-#parser.add_argument('-s', '--signal', help='Signal to watch')
-
-args = parser.parse_args()
-
 import binascii
 
 class ElmDbusCanWatcher(dbus.service.Object):
@@ -44,13 +33,14 @@ class ElmDbusCanWatcher(dbus.service.Object):
 
     @dbus.service.signal('rvi.vsi.ElmDbusCanWatcher')
     def interpreted_can_signal(self, interpreted_message=None):
+        print(interpreted_message)
         pass
 
     def CAN_signal_handler(self, can_message=None):
         self.CAN_handler(can_message)
 
     def CAN_handler(self, can_message=None):
-        #print(can_message)
+        # print(can_message)
         self.raw_message_queue.put(can_message)
         self.create_can_message_from_raw_signal(self.raw_message_queue, self.interp_message_queue)
 
@@ -153,6 +143,16 @@ class CanInterpreter(object):
             self.map_values(arb_id = msgId, payload = data)
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=('Provoke the Elm Dbus object '+elm_name))
+
+    #parser.add_argument('-m', '--method', help='Method to invoke')
+    #parser.add_argument('-a', '--args', help='Method args', nargs='*')
+
+    parser.add_argument('-c', '--watch-can', help='Start an object that watches the CAN signals', action='store_true')
+    #parser.add_argument('-s', '--signal', help='Signal to watch')
+
+    args = parser.parse_args()
+
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
     bus = dbus.SessionBus()
