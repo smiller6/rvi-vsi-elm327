@@ -6,22 +6,11 @@ from gi.repository import Gtk as gtk
 import can
 import json
 from multiprocessing import Process, Queue
-
+import struct
 import can_dbc_reader
 
 elm_name = "rvi.vsi.ElmDbus"
 elm_path = "/rvi/vsi/ElmDbus/object"
-
-
-parser = argparse.ArgumentParser(description=('Provoke the Elm Dbus object '+elm_name))
-
-#parser.add_argument('-m', '--method', help='Method to invoke')
-#parser.add_argument('-a', '--args', help='Method args', nargs='*')
-
-parser.add_argument('-c', '--watch-can', help='Start an object that watches the CAN signals', action='store_true')
-#parser.add_argument('-s', '--signal', help='Signal to watch')
-
-args = parser.parse_args()
 
 import binascii
 
@@ -44,13 +33,14 @@ class ElmDbusCanWatcher(dbus.service.Object):
 
     @dbus.service.signal('rvi.vsi.ElmDbusCanWatcher')
     def interpreted_can_signal(self, interpreted_message=None):
+        print(interpreted_message)
         pass
 
     def CAN_signal_handler(self, can_message=None):
         self.CAN_handler(can_message)
 
     def CAN_handler(self, can_message=None):
-        #print(can_message)
+        # print(can_message)
         self.raw_message_queue.put(can_message)
         self.create_can_message_from_raw_signal(self.raw_message_queue, self.interp_message_queue)
 
@@ -119,10 +109,65 @@ class CanInterpreter(object):
         c = b & maximum
         return (c^maximum)
 
+    def return_shift_endian(self, num_bytes=0, value=0 ):
+        assert num_bytes >= 0
+        mask = 255
+        r_val = ((value << (num_bytes * 8)) & (mask << (num_bytes * 8)))
+        if num_bytes > 0:
+                r_val |= self.return_shift_endian(num_bytes=num_bytes-1, value=value)
+        return r_val
+
+    def swap_bytes(self, num, size_bytes=2):
+        assert size_bytes <= 8
+        if size_bytes == 2:
+            #treat as short
+            return struct.unpack('<H', struct.pack('>H', num))[0]
+        elif 2 < size_bytes <= 4:
+            # int
+            return struct.unpack('<I', struct.pack('>I', num))[0]
+        elif 4 < size_bytes <= 8:
+            # long
+            return struct.unpack('<L', struct.pack('>L', num))[0]
+
     def map_values(self, arb_id, payload):
         num_bits = self.can_table[arb_id]['frame_bytes'] * 8
         for signal, specs in self.can_table[arb_id]['species'].items():
-            sig_value = ((payload >> (specs['end_bit']-specs['length']+1)  & (self.get_mask_ones(length=specs['length'], maximum = ((2**num_bits)-1)))) * specs['factor']) + specs['offset']
+            # discovered that the database stores entries for values greater than
+            # one byte in a strange format that defies out easy shift operation
+            # [end_bit] - [length] + 1 will always get you the right operation
+            # as long as end bit is greater than the length...
+            # but there are entries like this: 15 | 16 or 17 | 10  (!)
+            # so: the end bit still applies. but since a multi byte value is stored
+            # flipped (ie 3FE gets packed in as FE03), then the end bit designates
+            # the correct end for that number, but we have to assume that the
+            # next byte entire is used for the value as well
+            # SO! our formula changes if the length of the value is greater than a byte
+
+            sig_length = specs['length']
+            sig_end = specs['end_bit']
+            # old style works well for single byte...
+            if sig_length <= 8:
+                sig_value = ((payload >> (sig_end - sig_length + 1)  & (self.get_mask_ones(length=sig_length, maximum = ((2**num_bits)-1)))) * specs['factor']) + specs['offset']
+            elif sig_length > 8:
+                # need a new shiftby, because the endbit is on the end of a byte closer to the right...
+                index = sig_end
+                # local copy of payload for isolation and manipulation
+                data = payload
+                # while index does not point to somewhere in the rightmost byte,
+                # shift by 8
+                while index > 7:
+                    data >>= 8
+                    index -= 8
+                # # our two bytes should be on the right, so mask, flip and find the value...
+                # just how many bytes does our value take up?
+                byte_val = sig_length // 8
+                # create a mask using the position of the first relevant byte
+                mask = data & (0xFFFFFFFFFFFFFFFF >> (sig_end -  (sig_length - 8) + 1))
+                data &= mask
+                sig_value = self.swap_bytes(data, size_bytes= byte_val)
+
+                sig_value = (sig_value * specs['factor']) + specs['offset']
+
             if specs['value'] == sig_value:
                 pass
             else:
@@ -153,6 +198,16 @@ class CanInterpreter(object):
             self.map_values(arb_id = msgId, payload = data)
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=('Provoke the Elm Dbus object '+elm_name))
+
+    #parser.add_argument('-m', '--method', help='Method to invoke')
+    #parser.add_argument('-a', '--args', help='Method args', nargs='*')
+
+    parser.add_argument('-c', '--watch-can', help='Start an object that watches the CAN signals', action='store_true')
+    #parser.add_argument('-s', '--signal', help='Signal to watch')
+
+    args = parser.parse_args()
+
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
     bus = dbus.SessionBus()

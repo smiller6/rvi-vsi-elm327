@@ -20,6 +20,8 @@ from serial import *
 from connection import *
 from obd import *
 
+from elm_dbus_watcher import ElmDbusCanWatcher, CanInterpreter
+
 COMMAND_QUEUE_MAX_SIZE = 1024
 
 RESPONSE_QUEUE_MAX_SIZE = 1024
@@ -71,6 +73,17 @@ CUSTOM_CAN_RATE = args.custom_can_rate
 command_queue = Queue(COMMAND_QUEUE_MAX_SIZE)
 response_queue = Queue(RESPONSE_QUEUE_MAX_SIZE)
 
+class ElmRepsonse():
+    def __init__(self, msg=None, msg_type=None):
+        # msg holds the actual message string from ELM
+        self.msg = msg
+        #msgTypes:
+        # 'at'
+        # 'can'
+        # 'obd'
+        self.msg_type = msg_type
+
+
 # create test class for elm chip on dbus
 class ElmDbus(dbus.service.Object):
 
@@ -84,19 +97,24 @@ class ElmDbus(dbus.service.Object):
         self._command_queue = command_queue
         self._response_queue = response_queue
 
+        self.bEmitRawCan = False
+        self.bEmitInterpCan = True
+
+        # start watcher and interpreter
+        self.watcher = ElmDbusCanWatcher(conn)
+
     ############################################################################
     # dbus
+    @dbus.service.method('rvi.vsi.ElmDbus')
+    def at_command(self, msg=None):
+        print ">" + msg
+        self._command_que.put(msg)
 
     @dbus.service.signal('rvi.vsi.ElmDbus')
     def at_response(self, msg=None):
         # send the message string of the serial response from the elm
         print(msg)
         # return msg
-
-    @dbus.service.method('rvi.vsi.ElmDbus')
-    def at_command(self, msg=None):
-        print ">" + msg
-        self._command_que.put(msg)
 
     @dbus.service.signal('rvi.vsi.ElmDbus')
     def can_response(self, msg=None):
@@ -125,6 +143,16 @@ class ElmDbus(dbus.service.Object):
                                          header=header, spaces=spaces)
         print(reply)
         return reply
+
+    @dbus.service.method('rvi.vsi.ElmDbus')
+    def enable_signal_raw_can(self, enable=False):
+        self.bEmitRawCan = enable
+
+    @dbus.service.method('rvi.vsi.ElmDbus')
+    def enable_signal_interp_can(self, enable=True):
+        self.bEmitInterpCan = enable
+
+    # DIRECT ELM COMMANDS
     # sends command to the queue
     def _send_command(self, command):
         self._command_queue.put(command)
@@ -229,65 +257,68 @@ class ElmObd(object):
         self.obd = None
         self._command_queue = command_queue
         self._response_queue = response_queue
-        self.response = None
+        
+        # used to determine if we are still emitting frames
+        self.last_command = ""
     #commands
     #   commands for interacting directly with ELM/STN chip
     #   ST specific commands are designated with the postfix _st
     #   per the ELM/STN set, most commands take a single argument
 
     def command_at_command(self, command=""):
+        self.last_command = command
         return self.obd._send_command(str(command))
 
     def command_buffer_dump(self):
-        return self.obd._send_command("ATBD")
+        return self.command_at_command("ATBD")
 
     def command_set_silent_monitor(self, silent=True):
         if silent:
-            return self.obd._send_command("ATCSM1")
+            return self.command_at_command("ATCSM1")
         else:
-            return self.obd._send_command("ATCSM0")
+            return self.command_at_command("ATCSM0")
 
     def command_format_can(self, format=True):
         if format:
-            return self.obd._send_command("ATCAF1")
+            return self.command_at_command("ATCAF1")
         else:
-            return self.obd._send_command("ATCAF0")
+            return self.command_at_command("ATCAF0")
 
     def command_header_on(self, header=True):
         if header:
-            return self.obd._send_command("ATH1")
+            return self.command_at_command("ATH1")
         else:
-            return self.obd._send_command("ATH0")
+            return self.command_at_command("ATH0")
 
     def command_spaces_on(self, spaces=True):
         if spaces:
-            return self.obd._send_command("ATS1")
+            return self.command_at_command("ATS1")
         else:
-            return self.obd._send_command("ATS0")
+            return self.command_at_command("ATS0")
 
     def command_set_baud_rate_st(self, rate=9600):
         if 9600 <= rate <= 2000000:
-            return self.obd._send_command("STSBR" + str(rate))
+            return self.command_at_command("STSBR" + str(rate))
         else:
             return False
 
     def command_echo_on(self, echo=True):
         if echo:
-            return self.obd._send_command("ATE1")
+            return self.command_at_command("ATE1")
         else:
-            return self.obd._send_command("ATE0")
+            return self.command_at_command("ATE0")
 
     def command_monitor_can_at(self):
-        return self.obd._send_command("ATMA")
+        return self.command_at_command("ATMA")
 
     def command_select_protocol(self, protocol_number="0"):
-        return self.obd._send_command("ATSP" + protocol_number)
+        return self.command_at_command("ATSP" + protocol_number)
 
     def command_select_protocol_auto(self, protocol_number="0"):
-        return self.obd._send_command("ATSPA" + protocol_number)
+        return self.command_at_command("ATSPA" + protocol_number)
 
     def command_warm_start(self):
-        return self.obd._send_command("ATWS")
+        return self.command_at_command("ATWS")
 
     def set_custom_can_rate(self, rate):
         _rate = int(rate)
@@ -297,6 +328,9 @@ class ElmObd(object):
             div = str(hex(div))
             # program the programmable value for user can rate divisor
             self.command_at_command("AT" + "PP" + "2D" + "SV" + div)
+    def send_response(self, msg=None, msg_type='at'):
+        elm_response = ElmRepsonse(msg, msg_type)
+        self._response_queue.put(elm_response)
 
     def start_elm(self, serial_device=None, baud_rate=0):
         if SERIAL_DEVICE:
@@ -314,10 +348,13 @@ class ElmObd(object):
 
                 self.obd = OBDInterface(connection)
                 ati_response = self.command_at_command("ATI")
-                self._response_queue.put(ati_response)
+                #self._response_queue.put(ati_response)
+                self.send_response(msg=ati_response)
                 print("Low speed ATI response: " + ati_response)
-                self._response_queue.put(self.command_at_command("ATE0"))
-                self._response_queue.put(self.command_at_command("STSBR" + str(self.baud_rate)))
+                # self._response_queue.put(self.command_at_command("ATE0"))
+                self.send_response(self.command_at_command("ATE0"))
+                # self._response_queue.put(self.command_at_command("STSBR" + str(self.baud_rate)))
+                self.send_response(self.command_at_command("STSBR" + str(self.baud_rate)))
 
                 # close connection, reconnect
                 self.obd._connection.close()
@@ -356,13 +393,6 @@ class ElmObd(object):
 
 ################################################################################
 
-
-# def read_elm(ElmDbus):
-#     while(True):
-#         line = ElmObd.obd._connection._read()
-#         if line:
-#             print(ElmDbus.at_response(line))
-
 def run_elm_obd(ElmObd):
     # if there's a command in the command que, send the command to serial
     # if no command, just read the serial and put that in the response que
@@ -371,22 +401,37 @@ def run_elm_obd(ElmObd):
 
         if (command_queue.empty() == False):
             command = command_queue.get()
-            elm_response = ElmObd.obd._send_command(command)
+            # elm_response = ElmRepsonse(ElmObd.obd._send_command(command))
             # command_queue.task_done()
+            elm_response = ElmObd.command_at_command(command)
         else:
-            elm_response = ElmObd.obd._connection._read()
+            # elm_response = ElmRepsonse(ElmObd.obd._send_command())
+            elm_response = ElmObd.obd._send_command(None)
 
         # we don't care about responses that have no info
         if elm_response is not None and elm_response is not '':
-            response_queue.put(elm_response)
-            
+            if (ElmObd.last_command).lower() == 'atma':
+                # elm_response.msg_type = 'can'
+                ElmObd.send_response(msg=elm_response, msg_type='can')
+            else:
+                # elm_response.msg_type = 'at'
+                # response_queue.put(elm_response)
+                ElmObd.send_response(msg=elm_response, msg_type='at')
+
 
 def run_dbus(ElmDbus):
     while(True):
         if (response_queue.empty() == False):
             #publish response
             response = response_queue.get()
-            ElmDbus.at_response(response)
+            if response.msg_type == 'at':
+                ElmDbus.at_response(response.msg)
+            elif response.msg_type == 'can':
+                if ElmDbus.bEmitInterpCan is True:
+                    # send msg to interp que
+                    ElmDbus.watcher.CAN_handler(response.msg)
+                if ElmDbus.bEmitRawCan is True:
+                    ElmDbus.at_response(response.msg)
             # response_queue.task_done()
 
 # main loop run dbus object for elm
@@ -408,16 +453,6 @@ if __name__ == '__main__':
 
     elm_dbus.obd = elm_obd
     # we assume elm has started and we can talk to it...
-
-    # example/test of command response:
-    # send_command(command_queue, "atws")
-    # command = command_queue.get()
-    # command_queue.task_done()
-    # print(elm_obd.obd._send_command(command))
-    # response = elm_obd.obd._connection._read()
-    # response_queue.put(response)
-    # elm_dbus.at_response(response_queue.get())
-    # response_queue.task_done()
 
     elm_obd.command_buffer_dump()
 

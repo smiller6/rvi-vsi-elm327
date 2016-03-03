@@ -52,6 +52,7 @@ class SerialConnection(object):
         self._port = None
 
     def _write(self, data):
+        if data is None: return
         # change old flushInput/Output to _reset call -SM
         self._port.reset_input_buffer()
         self._port.reset_output_buffer()
