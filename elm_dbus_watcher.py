@@ -112,7 +112,38 @@ class CanInterpreter(object):
     def map_values(self, arb_id, payload):
         num_bits = self.can_table[arb_id]['frame_bytes'] * 8
         for signal, specs in self.can_table[arb_id]['species'].items():
-            sig_value = ((payload >> (specs['end_bit']-specs['length']+1)  & (self.get_mask_ones(length=specs['length'], maximum = ((2**num_bits)-1)))) * specs['factor']) + specs['offset']
+            # discovered that the database stores entries for values greater than
+            # one byte in a strange format that defies out easy shift operation
+            # [end_bit] - [length] + 1 will always get you the right operation
+            # as long as end bit is greater than the length...
+            # but there are entries like this: 15 | 16 or 17 | 10  (!)
+            # so: the end bit still applies. but since a multi byte value is stored
+            # flipped (ie 3FE gets packed in as FE03), then the end bit designates
+            # the correct end for that number, but we have to assume that the
+            # next byte entire is used for the value as well
+            # SO! our formula changes if the length of the value is greater than a byte
+
+            sig_length = specs['length']
+            sig_end = specs['end_bit']
+            # old style works well for single byte...
+            if sig_length <= 8:
+                sig_value = ((payload >> (sig_end - sig_length + 1)  & (self.get_mask_ones(length=sig_length, maximum = ((2**num_bits)-1)))) * specs['factor']) + specs['offset']
+            elif sig_length > 8:
+                # need a new shiftby, because the endbit is on the end of a byte closer to the right...
+                index = sig_end
+                # local copy of payload for isolation and manipulation
+                data = payload
+                # while index does not point to somewhere in the rightmost byte,
+                # shift by 8
+                while index > 7:
+                    data >>= 8
+                    index -= 8
+                # our two bytes should be on the right, so mask, flip and find the value...
+                val = data & 0xFFFF
+                sig_value = ((val << 8) & 0xFF00) |\
+                            ((val >> 8) & 0x00FF)
+                sig_value = (sig_value * specs['factor']) + specs['offset']
+
             if specs['value'] == sig_value:
                 pass
             else:
