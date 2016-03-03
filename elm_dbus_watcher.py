@@ -6,7 +6,7 @@ from gi.repository import Gtk as gtk
 import can
 import json
 from multiprocessing import Process, Queue
-
+import struct
 import can_dbc_reader
 
 elm_name = "rvi.vsi.ElmDbus"
@@ -109,6 +109,26 @@ class CanInterpreter(object):
         c = b & maximum
         return (c^maximum)
 
+    def return_shift_endian(self, num_bytes=0, value=0 ):
+        assert num_bytes >= 0
+        mask = 255
+        r_val = ((value << (num_bytes * 8)) & (mask << (num_bytes * 8)))
+        if num_bytes > 0:
+                r_val |= self.return_shift_endian(num_bytes=num_bytes-1, value=value)
+        return r_val
+
+    def swap_bytes(self, num, size_bytes=2):
+        assert size_bytes <= 8
+        if size_bytes == 2:
+            #treat as short
+            return struct.unpack('<H', struct.pack('>H', num))[0]
+        elif 2 < size_bytes <= 4:
+            # int
+            return struct.unpack('<I', struct.pack('>I', num))[0]
+        elif 4 < size_bytes <= 8:
+            # long
+            return struct.unpack('<L', struct.pack('>L', num))[0]
+
     def map_values(self, arb_id, payload):
         num_bits = self.can_table[arb_id]['frame_bytes'] * 8
         for signal, specs in self.can_table[arb_id]['species'].items():
@@ -138,10 +158,14 @@ class CanInterpreter(object):
                 while index > 7:
                     data >>= 8
                     index -= 8
-                # our two bytes should be on the right, so mask, flip and find the value...
-                val = data & 0xFFFF
-                sig_value = ((val << 8) & 0xFF00) |\
-                            ((val >> 8) & 0x00FF)
+                # # our two bytes should be on the right, so mask, flip and find the value...
+                # just how many bytes does our value take up?
+                byte_val = sig_length // 8
+                # create a mask using the position of the first relevant byte
+                mask = data & (0xFFFFFFFFFFFFFFFF >> (sig_end -  (sig_length - 8) + 1))
+                data &= mask
+                sig_value = self.swap_bytes(data, size_bytes= byte_val)
+
                 sig_value = (sig_value * specs['factor']) + specs['offset']
 
             if specs['value'] == sig_value:
