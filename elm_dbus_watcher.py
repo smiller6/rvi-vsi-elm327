@@ -113,14 +113,6 @@ class CanInterpreter(object):
         c = b & maximum
         return (c^maximum)
 
-    def return_shift_endian(self, num_bytes=0, value=0 ):
-        assert num_bytes >= 0
-        mask = 255
-        r_val = ((value << (num_bytes * 8)) & (mask << (num_bytes * 8)))
-        if num_bytes > 0:
-                r_val |= self.return_shift_endian(num_bytes=num_bytes-1, value=value)
-        return r_val
-
     def swap_bytes(self, num, size_bytes=2):
         assert size_bytes <= 8
         if size_bytes == 2:

@@ -61,6 +61,9 @@ parser.add_argument("--custom_can_rate",
                     "500kbps",
                     default=125000
                     )
+parser.add_argument("--interpret_can",
+                    help="Can database path",
+                    default="utf8_can_dbc.txt")
 args = parser.parse_args()
 
 SERIAL_DEVICE = args.serial_device
@@ -69,6 +72,7 @@ CAN_AUTO_START = args.can_auto_start
 CAN_SILENT_MONITORING = args.can_silent
 CAN_PROTOCOL = str(args.can_protocol)
 CUSTOM_CAN_RATE = args.custom_can_rate
+CANDB_PATH = str(args.interpret_can)
 
 command_queue = Queue(COMMAND_QUEUE_MAX_SIZE)
 response_queue = Queue(RESPONSE_QUEUE_MAX_SIZE)
@@ -102,6 +106,8 @@ class ElmDbus(dbus.service.Object):
 
         # start watcher and interpreter
         self.watcher = ElmDbusCanWatcher(conn)
+        if CANDB_PATH is not None:
+            self.watcher._interp.set_interpreter_path(db_path=CANDB_PATH)
 
     ############################################################################
     # dbus
