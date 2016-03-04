@@ -8,6 +8,7 @@ import json
 from multiprocessing import Process, Queue
 import struct
 import can_dbc_reader
+import math
 
 elm_name = "rvi.vsi.ElmDbus"
 elm_path = "/rvi/vsi/ElmDbus/object"
@@ -87,11 +88,11 @@ class ElmDbusCanWatcher(dbus.service.Object):
                 # print(msg)
 
 class CanInterpreter(object):
-    def __init__(self):
+    def __init__(self, db_path='utf8_can_dbc.txt'):
         object.__init__(self)
         self.interp_queue = None
 
-        self.can_table = can_dbc_reader.get_can('utf8_can_dbc.txt')
+        self.can_table = can_dbc_reader.get_can(db_path)
         self.state_table = {}
         self.signal_table = {}
 
@@ -101,6 +102,9 @@ class CanInterpreter(object):
         for arb_id, params in self.can_table.items():
             for signal, values in params['species'].items():
                 self.signal_table[signal] = self.can_table[arb_id]['species'][signal]['value']
+
+    def set_interpreter_path(self, db_path='utf8_can_dbc.txt'):
+        self.can_table = can_dbc_reader.get_can(db_path)
 
     # Magic code to create a bitmask of length
     # maximum length is actuall the maximum number of bits we can have in each frame, we default to an 8 byte frame
@@ -124,10 +128,17 @@ class CanInterpreter(object):
             return struct.unpack('<H', struct.pack('>H', num))[0]
         elif 2 < size_bytes <= 4:
             # int
-            return struct.unpack('<I', struct.pack('>I', num))[0]
+            return int(struct.unpack('<I', struct.pack('>I', num))[0])
         elif 4 < size_bytes <= 8:
             # long
-            return struct.unpack('<L', struct.pack('>L', num))[0]
+            return long(struct.unpack('<L', struct.pack('>L', num))[0])
+        else:
+            print("NO MATCH BYTE NUMBER")
+            print(size_bytes)
+
+    def round_bits_up(self, x):
+        # round up to nearest whole byte value
+        return int(math.ceil(x / 8.0)) * 8
 
     def map_values(self, arb_id, payload):
         num_bits = self.can_table[arb_id]['frame_bytes'] * 8
@@ -149,22 +160,24 @@ class CanInterpreter(object):
             if sig_length <= 8:
                 sig_value = ((payload >> (sig_end - sig_length + 1)  & (self.get_mask_ones(length=sig_length, maximum = ((2**num_bits)-1)))) * specs['factor']) + specs['offset']
             elif sig_length > 8:
-                # need a new shiftby, because the endbit is on the end of a byte closer to the right...
-                index = sig_end
-                # local copy of payload for isolation and manipulation
-                data = payload
-                # while index does not point to somewhere in the rightmost byte,
-                # shift by 8
-                while index > 7:
-                    data >>= 8
-                    index -= 8
-                # # our two bytes should be on the right, so mask, flip and find the value...
-                # just how many bytes does our value take up?
-                byte_val = sig_length // 8
-                # create a mask using the position of the first relevant byte
-                mask = data & (0xFFFFFFFFFFFFFFFF >> (sig_end -  (sig_length - 8) + 1))
-                data &= mask
-                sig_value = self.swap_bytes(data, size_bytes= byte_val)
+                # mask value in place by
+                #   creating value equal to length of bits rounded up to nearest byte
+                #   or that with a 64bit, shift << by the starting location of our value
+                # and mask with data, data should be isolated
+                # shift data >> by starting location
+                # and data with length of bits rounded up to convert to smaller number
+                # swizzle endianness in func, make sure func returns masked value
+
+                bit_size = self.round_bits_up(sig_length)
+                val_start_bit = sig_end - (sig_length - 8) +1
+
+                val_size_mask = (2**bit_size)-1
+                mask = (0x0000000000000000 | val_size_mask) << val_start_bit
+
+                local_data = ((payload & mask) >> val_start_bit) & val_size_mask
+
+                num_bytes = bit_size // 8
+                sig_value = self.swap_bytes(local_data, size_bytes=num_bytes)
 
                 sig_value = (sig_value * specs['factor']) + specs['offset']
 
