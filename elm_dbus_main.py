@@ -122,6 +122,15 @@ class ElmDbus(dbus.service.Object):
         print(msg)
         # return msg
 
+    def emit_at_response(self, msg=None):
+        try:
+            msg.decode('utf-8')
+            self.at_response(msg)
+        except:
+            print(msg)
+        else:
+            self.at_response("String not UTF8")
+
     @dbus.service.signal('rvi.vsi.ElmDbus')
     def can_response(self, msg=None):
         print(msg)
@@ -431,13 +440,13 @@ def run_dbus(ElmDbus):
             #publish response
             response = response_queue.get()
             if response.msg_type == 'at':
-                ElmDbus.at_response(response.msg)
+                ElmDbus.emit_at_response(response.msg)
             elif response.msg_type == 'can':
                 if ElmDbus.bEmitInterpCan is True:
                     # send msg to interp que
                     ElmDbus.watcher.CAN_handler(response.msg)
                 if ElmDbus.bEmitRawCan is True:
-                    ElmDbus.at_response(response.msg)
+                    ElmDbus.emit_at_response(response.msg)
             # response_queue.task_done()
 
 # main loop run dbus object for elm
