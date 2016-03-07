@@ -63,21 +63,29 @@ class ElmDbusCanWatcher(dbus.service.Object):
 
             raw_list = list()
             raw_list = converted.split()
+            raw_id = raw_list.pop(0)
+            try:
+                can_id = int(raw_id, 16)
 
-            can_id = int(raw_list.pop(0), 16)
 
-            can_data = []
+                can_data = []
 
-            while(raw_list.__len__() > 0):
-               can_data.append(int(raw_list.pop(), 16))
+                while(raw_list.__len__() > 0):
+                   can_data.append(int(raw_list.pop(), 16))
 
-            can_data = bytearray(can_data)
+                can_data = bytearray(can_data)
 
-            can_message.arbitration_id = can_id
-            can_message.data = can_data
+                can_message.arbitration_id = can_id
+                can_message.data = can_data
 
-            # actually interpret the message...!
-            self._interp.interp_message(can_message)
+                # actually interpret the message...!
+                self._interp.interp_message(can_message)
+                
+            except:
+                print("Not CAN ID: {}").format(raw_id)
+            else:
+                can_id = 0
+
             #perhaps make the above blocking to ...
 
     def print_interp_message(self, exclusive=False):
