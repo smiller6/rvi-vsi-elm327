@@ -464,6 +464,9 @@ if __name__ == '__main__':
         if(start_try_count >= 5):
             exit()
 
+    while dbus.SessionBus() is None:
+        time.sleep(0.5)
+
     elm_dbus = ElmDbus(dbus.SessionBus())
 
     elm_dbus.obd = elm_obd
