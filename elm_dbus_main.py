@@ -9,10 +9,14 @@
 
 import argparse
 import dbus
+import dbus.service
+
 import dbus.mainloop.glib
 from dbus.mainloop.glib import DBusGMainLoop
-import dbus.service
+DBusGMainLoop(set_as_default=True)
+
 from multiprocessing import Process, Queue
+import gobject
 
 from serial import *
 
@@ -455,11 +459,11 @@ def run_dbus(ElmDbus):
 # main loop run dbus object for elm
 if __name__ == '__main__':
 
-    dbus_loop = DBusGMainLoop(set_as_default=True)
-    while dbus.SessionBus(mainloop=dbus_loop) is None:
+    loop = gobject.MainLoop()
+    while dbus.SessionBus() is None:
         time.sleep(0.5)
 
-    bus = dbus.SessionBus(mainloop=dbus_loop)
+    bus = dbus.SessionBus()
 
     # create dbus object
     elm_obd = ElmObd()
@@ -490,4 +494,4 @@ if __name__ == '__main__':
     if CAN_AUTO_START == True:
         elm_dbus.monitor_can(silent=CAN_SILENT_MONITORING, format_can=False, header=True, spaces=True)
 
-    dbus_loop.run()
+    loop.run()
