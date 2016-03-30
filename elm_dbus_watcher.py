@@ -1,8 +1,11 @@
 import argparse
 import dbus
-import dbus.mainloop.glib
 import dbus.service
-from gi.repository import Gtk as gtk
+import dbus.mainloop.glib
+from dbus.mainloop.glib import DBusGMainLoop
+DBusGMainLoop(set_as_default=True)
+
+import gobject
 import can
 import json
 from multiprocessing import Process, Queue
@@ -221,7 +224,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+    loop = gobject.MainLoop()
 
     bus = dbus.SessionBus()
 
@@ -245,7 +248,4 @@ if __name__ == '__main__':
         header = True
         spaces = True
 
-        #monitor_can(silent, format, header, spaces)
-
-    print('Starting GTK Main')
-    gtk.main()
+    gobject.MainLoop().run()
