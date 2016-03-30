@@ -10,10 +10,9 @@
 import argparse
 import dbus
 import dbus.mainloop.glib
+from dbus.mainloop.glib import DBusGMainLoop
 import dbus.service
-# import threading
 from multiprocessing import Process, Queue
-from gi.repository import Gtk as gtk
 
 from serial import *
 
@@ -266,7 +265,7 @@ class ElmDbus(dbus.service.Object):
 
 ################################################################################
 class ElmObd(object):
-    def __init__(self, command_queue, response_queue):
+    def __init__(self):
         object.__init__(self)
 
         self.obd = None
@@ -361,6 +360,8 @@ class ElmObd(object):
 
                 connection = ser.connect(SERIAL_DEVICE)
 
+                time.sleep(1)
+
                 self.obd = OBDInterface(connection)
                 ati_response = self.command_at_command("ATI")
                 #self._response_queue.put(ati_response)
@@ -381,6 +382,8 @@ class ElmObd(object):
                                               write_timeout=1)
 
                 connection = ser.connect(SERIAL_DEVICE)
+
+                time.sleep(1)
 
                 self.obd = OBDInterface(connection)
                 # send a carriage return
@@ -451,9 +454,15 @@ def run_dbus(ElmDbus):
 
 # main loop run dbus object for elm
 if __name__ == '__main__':
-    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+
+    dbus_loop = DBusGMainLoop(set_as_default=True)
+    while dbus.SessionBus(mainloop=dbus_loop) is None:
+        time.sleep(0.5)
+
+    bus = dbus.SessionBus(mainloop=dbus_loop)
+
     # create dbus object
-    elm_obd = ElmObd(command_queue, response_queue)
+    elm_obd = ElmObd()
     # start thread on func
 
     # blocking setup call to start elm chip for the first time
@@ -464,10 +473,8 @@ if __name__ == '__main__':
         if(start_try_count >= 5):
             exit()
 
-    while dbus.SessionBus() is None:
-        time.sleep(0.5)
 
-    elm_dbus = ElmDbus(dbus.SessionBus())
+    elm_dbus = ElmDbus(bus)
 
     elm_dbus.obd = elm_obd
     # we assume elm has started and we can talk to it...
@@ -483,6 +490,4 @@ if __name__ == '__main__':
     if CAN_AUTO_START == True:
         elm_dbus.monitor_can(silent=CAN_SILENT_MONITORING, format_can=False, header=True, spaces=True)
 
-    print('Starting GTK Main')
-    gtk.main()
-    gtk.main_quit()
+    dbus_loop.run()
