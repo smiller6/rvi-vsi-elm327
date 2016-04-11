@@ -5,6 +5,9 @@ import dbus.mainloop.glib
 from dbus.mainloop.glib import DBusGMainLoop
 DBusGMainLoop(set_as_default=True)
 
+import time
+
+
 import gobject
 import can
 import json
@@ -181,6 +184,10 @@ class CanInterpreter(object):
 
                 num_bytes = bit_size // 8
                 sig_value = self.swap_bytes(local_data, size_bytes=num_bytes)
+                # mask out final val again just in case there were any extra bits
+                # packed in
+                mask = (0x0000000000000000 | ((2**sig_length)-1))
+                sig_value = sig_value & mask
 
                 sig_value = (sig_value * specs['factor']) + specs['offset']
 
@@ -214,6 +221,9 @@ class CanInterpreter(object):
             self.map_values(arb_id = msgId, payload = data)
 
 if __name__ == '__main__':
+
+    gobject.threads_init()
+
     parser = argparse.ArgumentParser(description=('Provoke the Elm Dbus object '+elm_name))
 
     #parser.add_argument('-m', '--method', help='Method to invoke')
@@ -225,8 +235,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     loop = gobject.MainLoop()
+    while dbus.SessionBus() is None:
+        time.sleep(0.5)
 
     bus = dbus.SessionBus()
+
 
     if args.watch_can:
 
@@ -248,4 +261,4 @@ if __name__ == '__main__':
         header = True
         spaces = True
 
-    gobject.MainLoop().run()
+    loop.run()
