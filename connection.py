@@ -56,8 +56,11 @@ class SerialConnection(object):
         # change old flushInput/Output to _reset call -SM
         self._port.reset_input_buffer()
         self._port.reset_output_buffer()
-        self._port.write(data)
-        self._port.write("\r")
+        try:
+            self._port.write(data)
+            self._port.write("\r")
+        except SerialException:
+            print('Serial Write Timeout')
 
     def _read(self):
         response = ""

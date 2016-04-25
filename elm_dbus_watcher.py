@@ -4,11 +4,11 @@ import dbus.service
 import dbus.mainloop.glib
 from dbus.mainloop.glib import DBusGMainLoop
 DBusGMainLoop(set_as_default=True)
+import gobject
 
 import time
 
 
-import gobject
 import can
 import json
 from multiprocessing import Process, Queue
