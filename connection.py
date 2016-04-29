@@ -52,6 +52,7 @@ class SerialConnection(object):
         self._port = None
 
     def _write(self, data):
+        print("warning, using old write")
         if data is None: return
         # change old flushInput/Output to _reset call -SM
         self._port.reset_input_buffer()
@@ -63,6 +64,7 @@ class SerialConnection(object):
             print('Serial Write Timeout')
 
     def _read(self):
+        print("warning, using old read")
         response = ""
         while True:
             c = self._port.read()

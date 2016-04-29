@@ -1,25 +1,24 @@
 import argparse
+import time
+import json
+import struct
+import math
+import binascii
+
+from multiprocessing import Process, Queue
+
+import can
+import can_dbc_reader
+
+import gobject
 import dbus
 import dbus.service
 import dbus.mainloop.glib
 from dbus.mainloop.glib import DBusGMainLoop
 DBusGMainLoop(set_as_default=True)
-import gobject
-
-import time
-
-
-import can
-import json
-from multiprocessing import Process, Queue
-import struct
-import can_dbc_reader
-import math
 
 elm_name = "rvi.vsi.ElmDbus"
 elm_path = "/rvi/vsi/ElmDbus/object"
-
-import binascii
 
 class ElmDbusCanWatcher(dbus.service.Object):
 
